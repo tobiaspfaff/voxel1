@@ -1,0 +1,8 @@
+.sconsign*
+*.sublime-project
+*.sublime-workspace
+Binaries
+Intermediate
+Saved
+voxel1.xcodeproj
+

@@ -1,0 +1,26 @@
+import os, glob
+
+debug = ARGUMENTS.get('debug', 0)
+
+flags = '-Wall '
+
+
+if int(debug):
+    # debug
+    flags += '-g -DDEBUG'
+    bdir = 'build/debug'
+else:
+    # release
+    flags += '-O3'
+    bdir = 'build/release'
+
+env = Environment(CCFLAGS = '-Wall '+flags)
+env.VariantDir(bdir, 'src', duplicate=0)
+
+source = []
+for f in Glob(bdir+'/*.cpp'):
+    source.append(f)
+
+lib = env.Library(target=bdir+'/backend', source=source)
+
+Return('lib')
