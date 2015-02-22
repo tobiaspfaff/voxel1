@@ -1,12 +1,7 @@
-/*
-int exported() {
-    return 12;
-}*/
-
 #include <openvdb/openvdb.h>
 #include <iostream>
 
-int exported()
+int main()
 {
     // Initialize the OpenVDB library.  This must be called at least
     // once per program and may safely be called multiple times.
@@ -44,6 +39,4 @@ int exported()
     for (openvdb::FloatGrid::ValueOnCIter iter = grid->cbeginValueOn(); iter; ++iter) {
         std::cout << "Grid" << iter.getCoord() << " = " << *iter << std::endl;
     }
-
-    return 23;
 }

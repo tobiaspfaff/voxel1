@@ -1,9 +1,12 @@
 import os, glob
 
+Import('*')
 debug = ARGUMENTS.get('debug', 0)
+standalone = ARGUMENTS.get('standalone', 0)
 
 flags = '-Wall '
-
+if 'parent_call' in locals():
+    standalone = False
 
 if int(debug):
     # debug
@@ -17,10 +20,14 @@ else:
 env = Environment(CCFLAGS = '-Wall '+flags)
 env.VariantDir(bdir, 'src', duplicate=0)
 
+libs = ['openvdb','tbb','Half']
 source = []
 for f in Glob(bdir+'/*.cpp'):
-    source.append(f)
+    if not f.name == 'main.cpp' or standalone:
+        source.append(f)
 
-lib = env.Library(target=bdir+'/backend', source=source)
-
-Return('lib')
+if standalone:
+    env.Program(target=bdir+'/backend', source=source, LIBS=libs)
+else:
+    lib = env.Library(target=bdir+'/backend', source=source)
+    Return('lib')

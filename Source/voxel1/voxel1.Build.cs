@@ -48,6 +48,9 @@ public class voxel1 : ModuleRules
 		{
 			AddMyInclude("Backend/include");
 			AddMyLibrary("Backend/build/release/libbackend.a");
+			AddMyLibrary("ThirdParty/libs/libHalf.dylib");
+			AddMyLibrary("ThirdParty/libs/libtbb.dylib");
+			AddMyLibrary("ThirdParty/libs/libopenvdb.dylib");
 		}
 	}
 }

@@ -3,6 +3,8 @@
 #include "voxel1.h"
 #include "GameGeneratedActor.h"
 
+int exported();
+
 AGameGeneratedActor::AGameGeneratedActor(const class FPostConstructInitializeProperties& PCIP)
     : Super(PCIP)
 {
@@ -14,7 +16,7 @@ AGameGeneratedActor::AGameGeneratedActor(const class FPostConstructInitializePro
     Mesh->SetGeneratedMeshTriangles(Triangles);
  
     RootComponent = Mesh;
-}
+} 
  
 inline void AddQuad(const FVector& Pos, int32 Dim, bool bCCW, float Size, TArray<FGeneratedMeshTriangle>& Triangles) 
 {
@@ -44,7 +46,8 @@ inline int32 Index(const FIntVector& P, int FieldBits) {
 void AGameGeneratedActor::ConstructVoxels(TArray<FGeneratedMeshTriangle>& Triangles) 
 {
     //UE_LOG(LogClass, Log, TEXT("AGameGeneratedActor::Lathe POINTS %d"), points.Num());
- 
+    UE_LOG(LogTemp, Warning, TEXT("Bla %d"), exported());
+
     // generate voxel field
     const int32 FieldBits = 6, FieldSize = 1<<FieldBits;
     uint8 Voxels[FieldSize*FieldSize*FieldSize];
