@@ -5,20 +5,32 @@
 #include "GeneratedMeshComponent.h"
 #include "DynamicMeshBuilder.h"
 
+struct FGeneratedVertex {
+    FVector Pos;
+    FPackedNormal T1, T2;
+
+    FGeneratedVertex() {}
+    FGeneratedVertex(const FVector& P, const FVector& TX, const FVector& TY, const FVector& TZ) : 
+        Pos(P), T1(TX), T2(TZ)
+    {
+        T2.Vector.W = GetBasisDeterminantSign(TX,TY,TZ) < 0.0f ? 0 : 255;
+    }
+};
+
 /** Vertex Buffer */
 class FGeneratedMeshVertexBuffer : public FVertexBuffer 
 {
 public:
-    TArray<FDynamicMeshVertex> Vertices;
+    TArray<FGeneratedVertex> Vertices;
 
     virtual void InitRHI() override
     {
         FRHIResourceCreateInfo CreateInfo;
-        VertexBufferRHI = RHICreateVertexBuffer(Vertices.Num() * sizeof(FDynamicMeshVertex),BUF_Static,CreateInfo);
+        VertexBufferRHI = RHICreateVertexBuffer(Vertices.Num() * sizeof(FGeneratedVertex),BUF_Static,CreateInfo);
 
         // Copy the vertex data into the vertex buffer.
-        void* VertexBufferData = RHILockVertexBuffer(VertexBufferRHI,0,Vertices.Num() * sizeof(FDynamicMeshVertex), RLM_WriteOnly);
-        FMemory::Memcpy(VertexBufferData,Vertices.GetData(),Vertices.Num() * sizeof(FDynamicMeshVertex));
+        void* VertexBufferData = RHILockVertexBuffer(VertexBufferRHI,0,Vertices.Num() * sizeof(FGeneratedVertex), RLM_WriteOnly);
+        FMemory::Memcpy(VertexBufferData,Vertices.GetData(),Vertices.Num() * sizeof(FGeneratedVertex));
         RHIUnlockVertexBuffer(VertexBufferRHI);
     }
 
@@ -63,13 +75,12 @@ public:
         {
             // Initialize the vertex factory's stream components.
             DataType NewData;
-            NewData.PositionComponent = STRUCTMEMBER_VERTEXSTREAMCOMPONENT(VertexBuffer,FDynamicMeshVertex,Position,VET_Float3);
-            NewData.TextureCoordinates.Add(
-                FVertexStreamComponent(VertexBuffer,STRUCT_OFFSET(FDynamicMeshVertex,TextureCoordinate),sizeof(FDynamicMeshVertex),VET_Float2)
-                );
-            NewData.TangentBasisComponents[0] = STRUCTMEMBER_VERTEXSTREAMCOMPONENT(VertexBuffer,FDynamicMeshVertex,TangentX,VET_PackedNormal);
-            NewData.TangentBasisComponents[1] = STRUCTMEMBER_VERTEXSTREAMCOMPONENT(VertexBuffer,FDynamicMeshVertex,TangentZ,VET_PackedNormal);
-            NewData.ColorComponent = STRUCTMEMBER_VERTEXSTREAMCOMPONENT(VertexBuffer, FDynamicMeshVertex, Color, VET_Color);
+            NewData.PositionComponent = STRUCTMEMBER_VERTEXSTREAMCOMPONENT(VertexBuffer,FGeneratedVertex,Pos,VET_Float3);
+            NewData.TextureCoordinates.Add(STRUCTMEMBER_VERTEXSTREAMCOMPONENT(VertexBuffer,FGeneratedVertex,Pos,VET_Float2));
+ 
+            NewData.TangentBasisComponents[0] = STRUCTMEMBER_VERTEXSTREAMCOMPONENT(VertexBuffer,FGeneratedVertex,T1,VET_PackedNormal);
+            NewData.TangentBasisComponents[1] = STRUCTMEMBER_VERTEXSTREAMCOMPONENT(VertexBuffer,FGeneratedVertex,T2,VET_PackedNormal);
+            //NewData.ColorComponent = STRUCTMEMBER_VERTEXSTREAMCOMPONENT(VertexBuffer, FGeneratedVertex, X, VET_Color);
             VertexFactory->SetData(NewData);
         });
     }
@@ -87,39 +98,37 @@ public:
         const FColor VertexColor(255,255,255);
 
         // Add each triangle to the vertex/index buffer
-        for(int TriIdx=0; TriIdx<Component->GeneratedMeshTris.Num(); TriIdx++)
+        float* FacePtr = Component->FaceData;
+        for(int32 TriIdx=0; TriIdx<Component->NumFaces; TriIdx++)
         {
-            FGeneratedMeshTriangle& Tri = Component->GeneratedMeshTris[TriIdx];
+            FVector V[3];
+            for (int32 VertIdx=0; VertIdx<3; VertIdx++)
+            for (int32 Comp=0; Comp<3; Comp++)
+                V[VertIdx][Comp] = *(FacePtr++);
 
-            const FVector Edge01 = (Tri.Vertex1 - Tri.Vertex0);
-            const FVector Edge02 = (Tri.Vertex2 - Tri.Vertex0);
+            const FVector Edge01 = (V[1] - V[0]);
+            const FVector Edge02 = (V[2] - V[0]);
 
             const FVector TangentX = Edge01.SafeNormal();
             const FVector TangentZ = (Edge02 ^ Edge01).SafeNormal();
             const FVector TangentY = (TangentX ^ TangentZ).SafeNormal();
 
-            FDynamicMeshVertex Vert0;
-            Vert0.Position = Tri.Vertex0;
-            Vert0.Color = VertexColor;
-            Vert0.SetTangents(TangentX, TangentY, TangentZ);
+            FGeneratedVertex Vert0(V[0], TangentX, TangentY, TangentZ);
             int32 VIndex = VertexBuffer.Vertices.Add(Vert0);
             IndexBuffer.Indices.Add(VIndex);
 
-            FDynamicMeshVertex Vert1;
-            Vert1.Position = Tri.Vertex1;
-            Vert1.Color = VertexColor;
-            Vert1.SetTangents(TangentX, TangentY, TangentZ);
+            FGeneratedVertex Vert1(V[1], TangentX, TangentY, TangentZ);
             VIndex = VertexBuffer.Vertices.Add(Vert1);
             IndexBuffer.Indices.Add(VIndex);
 
-            FDynamicMeshVertex Vert2;
-            Vert2.Position = Tri.Vertex2;
-            Vert2.Color = VertexColor;
-            Vert2.SetTangents(TangentX, TangentY, TangentZ);
+            FGeneratedVertex Vert2(V[2], TangentX, TangentY, TangentZ);
             VIndex = VertexBuffer.Vertices.Add(Vert2);
             IndexBuffer.Indices.Add(VIndex);
         }
-
+        FElement& Element = *new(Elements)FElement;
+        Element.FirstIndex = 0;
+        Element.NumPrimitives = IndexBuffer.Indices.Num() / 3;
+        
         // Init vertex factory
         VertexFactory.Init(&VertexBuffer);
 
@@ -143,92 +152,47 @@ public:
         VertexFactory.ReleaseResource();
     }
 
-    virtual void GetDynamicMeshElements(const TArray<const FSceneView*>& Views, const FSceneViewFamily& ViewFamily, uint32 VisibilityMap, FMeshElementCollector& Collector) const override
+    virtual void DrawDynamicElements(FPrimitiveDrawInterface* PDI,const FSceneView* View) override
     {
-        QUICK_SCOPE_CYCLE_COUNTER( STAT_GeneratedMeshSceneProxy_GetDynamicMeshElements );
-
-        const bool bWireframe = AllowDebugViewmodes() && ViewFamily.EngineShowFlags.Wireframe;
-
-        auto WireframeMaterialInstance = new FColoredMaterialRenderProxy(
-            GEngine->WireframeMaterial ? GEngine->WireframeMaterial->GetRenderProxy(IsSelected()) : NULL,
+        // Set up the wireframe material Face.
+        FColoredMaterialRenderProxy WireframeMaterialFace(
+            WITH_EDITOR ? GEngine->WireframeMaterial->GetRenderProxy(IsSelected()) : NULL,
             FLinearColor(0, 0.5f, 1.f)
             );
 
-        Collector.RegisterOneFrameMaterialProxy(WireframeMaterialInstance);
-
-        FMaterialRenderProxy* MaterialProxy = NULL;
-        if(bWireframe)
+        // Draw the mesh elements.
+        for(int32 ElementIndex = 0; ElementIndex < Elements.Num(); ++ElementIndex)
         {
-            MaterialProxy = WireframeMaterialInstance;
-        }
-        else
-        {
-            MaterialProxy = Material->GetRenderProxy(IsSelected());
-        }
-
-        for (int32 ViewIndex = 0; ViewIndex < Views.Num(); ViewIndex++)
-        {
-            if (VisibilityMap & (1 << ViewIndex))
-            {
-                const FSceneView* View = Views[ViewIndex];
-                // Draw the mesh.
-                FMeshBatch& Mesh = Collector.AllocateMesh();
-                FMeshBatchElement& BatchElement = Mesh.Elements[0];
-                BatchElement.IndexBuffer = &IndexBuffer;
-                Mesh.bWireframe = bWireframe;
-                Mesh.VertexFactory = &VertexFactory;
-                Mesh.MaterialRenderProxy = MaterialProxy;
-                BatchElement.PrimitiveUniformBuffer = CreatePrimitiveUniformBufferImmediate(GetLocalToWorld(), GetBounds(), GetLocalBounds(), true, UseEditorDepthTest());
-                BatchElement.FirstIndex = 0;
-                BatchElement.NumPrimitives = IndexBuffer.Indices.Num() / 3;
-                BatchElement.MinVertexIndex = 0;
-                BatchElement.MaxVertexIndex = VertexBuffer.Vertices.Num() - 1;
-                Mesh.ReverseCulling = IsLocalToWorldDeterminantNegative();
-                Mesh.Type = PT_TriangleList;
-                Mesh.DepthPriorityGroup = SDPG_World;
-                Mesh.bCanApplyViewModeOverrides = false;
-                Collector.AddMesh(ViewIndex, Mesh);
-            }
+            PDI->DrawMesh(GetMeshBatch(ElementIndex, View->Family->EngineShowFlags.Wireframe ? &WireframeMaterialFace : NULL));
         }
     }
 
-    virtual void DrawDynamicElements(FPrimitiveDrawInterface* PDI,const FSceneView* View)
+    virtual void DrawStaticElements(FStaticPrimitiveDrawInterface* PDI) override
     {
-        QUICK_SCOPE_CYCLE_COUNTER( STAT_GeneratedMeshSceneProxy_DrawDynamicElements );
-
-        const bool bWireframe = AllowDebugViewmodes() && View->Family->EngineShowFlags.Wireframe;
-
-        FColoredMaterialRenderProxy WireframeMaterialInstance(
-            GEngine->WireframeMaterial ? GEngine->WireframeMaterial->GetRenderProxy(IsSelected()) : NULL,
-            FLinearColor(0, 0.5f, 1.f)
-            );
-
-        FMaterialRenderProxy* MaterialProxy = NULL;
-        if(bWireframe)
+        for(int32 ElementIndex = 0; ElementIndex < Elements.Num(); ++ElementIndex)
         {
-            MaterialProxy = &WireframeMaterialInstance;
+            PDI->DrawMesh(GetMeshBatch(ElementIndex,NULL),FLT_MAX);
         }
-        else
-        {
-            MaterialProxy = Material->GetRenderProxy(IsSelected());
-        }
+    }
 
-        // Draw the mesh.
+    FMeshBatch GetMeshBatch(int32 ElementIndex,FMaterialRenderProxy* WireframeMaterialFace)
+    {
+        const FElement& Element = Elements[ElementIndex];
         FMeshBatch Mesh;
-        FMeshBatchElement& BatchElement = Mesh.Elements[0];
-        BatchElement.IndexBuffer = &IndexBuffer;
-        Mesh.bWireframe = bWireframe;
+        Mesh.bWireframe = WireframeMaterialFace != NULL;
         Mesh.VertexFactory = &VertexFactory;
-        Mesh.MaterialRenderProxy = MaterialProxy;
-        BatchElement.PrimitiveUniformBuffer = CreatePrimitiveUniformBufferImmediate(GetLocalToWorld(), GetBounds(), GetLocalBounds(), true, UseEditorDepthTest());
-        BatchElement.FirstIndex = 0;
-        BatchElement.NumPrimitives = IndexBuffer.Indices.Num() / 3;
-        BatchElement.MinVertexIndex = 0;
-        BatchElement.MaxVertexIndex = VertexBuffer.Vertices.Num() - 1;
+        Mesh.MaterialRenderProxy = WireframeMaterialFace ? WireframeMaterialFace : Material->GetRenderProxy(IsSelected());
         Mesh.ReverseCulling = IsLocalToWorldDeterminantNegative();
         Mesh.Type = PT_TriangleList;
         Mesh.DepthPriorityGroup = SDPG_World;
-        PDI->DrawMesh(Mesh);
+        Mesh.CastShadow = true;
+        Mesh.Elements[0].FirstIndex = Element.FirstIndex;
+        Mesh.Elements[0].NumPrimitives = Element.NumPrimitives;
+        Mesh.Elements[0].MinVertexIndex = 0;
+        Mesh.Elements[0].MaxVertexIndex = VertexBuffer.Vertices.Num() - 1;
+        Mesh.Elements[0].IndexBuffer = &IndexBuffer;
+        Mesh.Elements[0].PrimitiveUniformBuffer = PrimitiveUniformBuffer;
+        return Mesh;
     }
 
     virtual FPrimitiveViewRelevance GetViewRelevance(const FSceneView* View)
@@ -236,7 +200,8 @@ public:
         FPrimitiveViewRelevance Result;
         Result.bDrawRelevance = IsShown(View);
         Result.bShadowRelevance = IsShadowCast(View);
-        Result.bDynamicRelevance = true;
+        Result.bDynamicRelevance = View->Family->EngineShowFlags.Wireframe || IsSelected();
+        Result.bStaticRelevance = !Result.bDynamicRelevance;
         MaterialRelevance.SetPrimitiveViewRelevance(Result);
         return Result;
     }
@@ -246,11 +211,25 @@ public:
         return !MaterialRelevance.bDisableDepthTest;
     }
 
+    virtual void OnTransformChanged() override
+    {
+        // Create a uniform buffer with the transform for the chunk.
+        PrimitiveUniformBuffer = CreatePrimitiveUniformBufferImmediate(GetLocalToWorld(), GetBounds(), GetLocalBounds(), true, UseEditorDepthTest());
+    }
+
     virtual uint32 GetMemoryFootprint( void ) const { return( sizeof( *this ) + GetAllocatedSize() ); }
 
     uint32 GetAllocatedSize( void ) const { return( FPrimitiveSceneProxy::GetAllocatedSize() ); }
 
 private:
+    struct FElement
+    {
+        uint32 FirstIndex;
+        uint32 NumPrimitives;
+        uint32 MaterialIndex;
+        uint32 FaceIndex;
+    };
+    TArray<FElement> Elements;
 
     UMaterialInterface* Material;
     FGeneratedMeshVertexBuffer VertexBuffer;
@@ -258,24 +237,28 @@ private:
     FGeneratedMeshVertexFactory VertexFactory;
 
     FMaterialRelevance MaterialRelevance;
+
+    TUniformBufferRef<FPrimitiveUniformShaderParameters> PrimitiveUniformBuffer;
+
 };
 
 //////////////////////////////////////////////////////////////////////////
 
 UGeneratedMeshComponent::UGeneratedMeshComponent( const FObjectInitializer& ObjectInitializer )
-    : Super( ObjectInitializer )
+    : Super( ObjectInitializer ), FaceData(nullptr), NumFaces(0)
 {
     PrimaryComponentTick.bCanEverTick = false;
-
+    CastShadow = true;
+    bUseAsOccluder = true;
+    bCanEverAffectNavigation = true;    
+    //bAutoRegister = false;
     SetCollisionProfileName(UCollisionProfile::BlockAllDynamic_ProfileName);
 }
 
-bool UGeneratedMeshComponent::SetGeneratedMeshTriangles(const TArray<FGeneratedMeshTriangle>& Triangles)
+bool UGeneratedMeshComponent::SetTriangleData(float* Data, int32 Num)
 {
-    GeneratedMeshTris = Triangles;
-    // Need to recreate scene proxy to send it over
-    MarkRenderStateDirty();
-
+    FaceData = Data;
+    NumFaces = Num;
     return true;
 }
 
@@ -283,7 +266,7 @@ bool UGeneratedMeshComponent::SetGeneratedMeshTriangles(const TArray<FGeneratedM
 FPrimitiveSceneProxy* UGeneratedMeshComponent::CreateSceneProxy()
 {
     FPrimitiveSceneProxy* Proxy = NULL;
-    if(GeneratedMeshTris.Num() > 0)
+    if(NumFaces > 0)
     {
         Proxy = new FGeneratedMeshSceneProxy(this);
     }

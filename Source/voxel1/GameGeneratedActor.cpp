@@ -3,7 +3,8 @@
 #include "voxel1.h"
 #include "GameGeneratedActor.h"
 
-int exported();
+// import from backend
+void build_test_voxel(float** Data, int& Num);
 
 AGameGeneratedActor::AGameGeneratedActor(const class FPostConstructInitializeProperties& PCIP)
     : Super(PCIP)
@@ -11,14 +12,22 @@ AGameGeneratedActor::AGameGeneratedActor(const class FPostConstructInitializePro
  
     TSubobjectPtr<UGeneratedMeshComponent> Mesh = PCIP.CreateDefaultSubobject<UGeneratedMeshComponent>(this, TEXT("GeneratedMesh"));
  
-    TArray<FGeneratedMeshTriangle> Triangles;
-    ConstructVoxels(Triangles);
-    Mesh->SetGeneratedMeshTriangles(Triangles);
+    //ConstructVoxels();
+    int Num;
+    float* RData = nullptr;
+    build_test_voxel(&RData, Num);
+    UE_LOG(LogTemp, Warning, TEXT("Num %d %d"), Num, Num/9);
+    for (int32 I=0; I<Num; I++) {
+        Data.Add(RData[I]*10);           
+    } 
+
+    Mesh->SetTriangleData(Data.GetData(), Data.Num()/9);
+    delete[] RData; 
  
     RootComponent = Mesh;
 } 
  
-inline void AddQuad(const FVector& Pos, int32 Dim, bool bCCW, float Size, TArray<FGeneratedMeshTriangle>& Triangles) 
+inline void AddQuad(const FVector& Pos, int32 Dim, bool bCCW, float Size, TArray<float>& Data) 
 {
     FVector V0(0);
     FVector V1(0);
@@ -27,26 +36,26 @@ inline void AddQuad(const FVector& Pos, int32 Dim, bool bCCW, float Size, TArray
     V0[(Dim+1) % 3] += bCCW ? -Size/2 : Size/2; 
     V1[(Dim+2) % 3] += Size / 2;
     
-    FGeneratedMeshTriangle Tri;
-    Tri.Vertex0 = C+V0+V1;
-    Tri.Vertex1 = C-V0+V1;
-    Tri.Vertex2 = C+V0-V1;
-    Triangles.Add(Tri);
-
-    Tri.Vertex0 = C-V0+V1;
-    Tri.Vertex1 = C-V0-V1;
-    Tri.Vertex2 = C+V0-V1;
-    Triangles.Add(Tri);
+    FVector Tri[6];
+    Tri[0] = C+V0+V1;
+    Tri[1] = C-V0+V1;
+    Tri[2] = C+V0-V1;
+    Tri[3] = C-V0+V1;
+    Tri[4] = C-V0-V1;
+    Tri[5] = C+V0-V1;
+    
+    for (int32 T=0; T<6; T++)
+    for (int32 Comp=0; Comp<3; Comp++)
+        Data.Add(Tri[T][Comp]);
 }
 
 inline int32 Index(const FIntVector& P, int FieldBits) {
     return P.X | (P.Y<<FieldBits) | (P.Z<<(FieldBits<<1));
 }
 
-void AGameGeneratedActor::ConstructVoxels(TArray<FGeneratedMeshTriangle>& Triangles) 
+void AGameGeneratedActor::ConstructVoxels() 
 {
-    //UE_LOG(LogClass, Log, TEXT("AGameGeneratedActor::Lathe POINTS %d"), points.Num());
-    UE_LOG(LogTemp, Warning, TEXT("Bla %d"), exported());
+    //UE_LOG(LogTemp, Warning, TEXT("Bla %d"), exported());
 
     // generate voxel field
     const int32 FieldBits = 6, FieldSize = 1<<FieldBits;
@@ -76,10 +85,10 @@ void AGameGeneratedActor::ConstructVoxels(TArray<FGeneratedMeshTriangle>& Triang
             FIntVector Pos = Pos0;
             Pos(d) += 1;
             if (!Voxels[Index(Pos, FieldBits)])
-                AddQuad(FVector(Pos0)*Scale, d, true, Scale, Triangles);
+                AddQuad(FVector(Pos0)*Scale, d, true, Scale, Data);
             Pos(d) -= 2;
             if (!Voxels[Index(Pos, FieldBits)])
-                AddQuad(FVector(Pos0)*Scale, d, false, Scale, Triangles);               
+                AddQuad(FVector(Pos0)*Scale, d, false, Scale, Data);               
         }
     }
 }

@@ -14,5 +14,6 @@ class AGameGeneratedActor : public AActor
 {
     GENERATED_UCLASS_BODY()
  
-    void ConstructVoxels(TArray<FGeneratedMeshTriangle>& triangles);
+    TArray<float> Data;
+    void ConstructVoxels();
 };

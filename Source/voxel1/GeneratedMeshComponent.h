@@ -4,21 +4,6 @@
 
 #include "GeneratedMeshComponent.generated.h"
 
-USTRUCT(BlueprintType)
-struct FGeneratedMeshTriangle
-{
-    GENERATED_USTRUCT_BODY()
-
-    UPROPERTY(EditAnywhere, Category=Triangle)
-    FVector Vertex0;
-
-    UPROPERTY(EditAnywhere, Category=Triangle)
-    FVector Vertex1;
-
-    UPROPERTY(EditAnywhere, Category=Triangle)
-    FVector Vertex2;
-};
-
 /** Component that allows you to specify Generated triangle mesh geometry */
 UCLASS(hidecategories=(Object,LOD, Physics, Collision), editinlinenew, meta=(BlueprintSpawnableComponent), ClassGroup=Rendering)
 class UGeneratedMeshComponent : public UMeshComponent
@@ -26,8 +11,7 @@ class UGeneratedMeshComponent : public UMeshComponent
     GENERATED_UCLASS_BODY()
 
     /** Set the geometry to use on this triangle mesh */
-    UFUNCTION(BlueprintCallable, Category="Components|GeneratedMesh")
-    bool SetGeneratedMeshTriangles(const TArray<FGeneratedMeshTriangle>& Triangles);
+    bool SetTriangleData(float* Data, int32 Num);
 
 private:
 
@@ -43,8 +27,9 @@ private:
     virtual FBoxSphereBounds CalcBounds(const FTransform& LocalToWorld) const override;
     // Begin USceneComponent interface.
 
-    /** */
-    TArray<FGeneratedMeshTriangle> GeneratedMeshTris;
+    // raw triangle data
+    float* FaceData;
+    int32 NumFaces;
 
     friend class FGeneratedMeshSceneProxy;
 };
